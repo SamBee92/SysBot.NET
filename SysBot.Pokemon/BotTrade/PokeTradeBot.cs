@@ -210,20 +210,20 @@ namespace SysBot.Pokemon
 
             // Wait until search finishes
             // Wait 30 Seconds for Trainer...
-            Log("Waiting for trainer ...");
+            Log("Waiting for trainer...");
             bool partnerFound;
             const uint ofs = LinkTradePartnerPokemonOffset;
             if (Hub.Config.Trade.SpinTrade)
                 partnerFound = await SpinUntilChangedLink(30_000, token).ConfigureAwait(false);
             else
-                partnerFound = await ReadUntilChanged(ofs, PokeTradeBotUtil.EMPTY_EC, 30_000, 0_200, token).ConfigureAwait(false);
+                partnerFound = await ReadUntilChanged(ofs, PokeTradeBotUtil.EMPTY_EC, 30_000, 0_200, false, token).ConfigureAwait(false);
 
             // Wait 15 more seconds. First 30 seconds is for spin
             if (!partnerFound)
             {
-                Log("Still no partner found.. waiting 15 more seconds");
+                Log("Still no partner found... waiting 15 more seconds");
                 partnerFound =
-                    await ReadUntilChanged(ofs, PokeTradeBotUtil.EMPTY_EC, 15_000, 0_200, token).ConfigureAwait(false);
+                    await ReadUntilChanged(ofs, PokeTradeBotUtil.EMPTY_EC, 15_000, 0_200, false, token).ConfigureAwait(false);
             }
 
             if (token.IsCancellationRequested)
@@ -525,10 +525,10 @@ namespace SysBot.Pokemon
             if (Hub.Config.Trade.SpinSurprise)
                 await SpinUntilChangedSurprise(30_000, token).ConfigureAwait(false);
             else
-                await ReadUntilChanged(ofs, searching, 30_000, 0_200, token).ConfigureAwait(false);
+                await ReadUntilChanged(ofs, searching, 30_000, 0_200, false, token).ConfigureAwait(false);
 
             // Wait 15 Seconds for offer...
-            var partnerFound = await ReadUntilChanged(SurpriseTradePartnerPokemonOffset, PokeTradeBotUtil.EMPTY_EC, 15_000, 0_200, token).ConfigureAwait(false);
+            var partnerFound = await ReadUntilChanged(SurpriseTradePartnerPokemonOffset, PokeTradeBotUtil.EMPTY_EC, 15_000, 0_200, false, token).ConfigureAwait(false);
 
             if (token.IsCancellationRequested)
                 return PokeTradeResult.Aborted;
@@ -543,9 +543,9 @@ namespace SysBot.Pokemon
             await Task.Delay(7_000, token).ConfigureAwait(false);
 
             var TrainerName = await GetTradePartnerName(TradeMethod.SupriseTrade, token).ConfigureAwait(false);
-            var SuprisePoke = await ReadSupriseTradePokemon(token).ConfigureAwait(false);
+            var SurprisePoke = await ReadSurpriseTradePokemon(token).ConfigureAwait(false);
 
-            Log($"Found Surprise Trade Partner: {TrainerName}, Pokémon: {(Species)SuprisePoke.Species}");
+            Log($"Found Surprise Trade Partner: {TrainerName}, Pokémon: {(Species)SurprisePoke.Species}");
 
             // Clear out the received trade data; we want to skip the trade animation.
             // The box slot locks have been removed prior to searching.
@@ -570,7 +570,7 @@ namespace SysBot.Pokemon
                 await ExitTrade(true, token).ConfigureAwait(false);
 
             if (DumpSetting.Dump && !string.IsNullOrEmpty(DumpSetting.DumpFolder))
-                DumpPokemon(DumpSetting.DumpFolder, "surprise", SuprisePoke);
+                DumpPokemon(DumpSetting.DumpFolder, "surprise", SurprisePoke);
             Hub.Counts.AddCompletedSurprise();
 
             return PokeTradeResult.Success;
