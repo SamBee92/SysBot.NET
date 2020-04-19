@@ -12,6 +12,12 @@ namespace SysBot.Pokemon
         [Category(FeatureToggle), Description("When set, the bot will assume that ldn_mitm sysmodule is running on your system. Better stability")]
         public bool UseLdnMitm { get; set; } = true;
 
+        [Category(FeatureToggle), Description("When set, the bot will roll species and set date to 2000, resetting it once it reaches 2060.")]
+        public bool AutoRoll { get; set; } = true;
+
+        [Category(FeatureToggle), Description("When set, the bot will remove then add 5 friends every 2 raids.")]
+        public bool FriendManagement { get; set; } = true;
+
         [Category(Hosting), Description("Minimum Link Code to host the raid with.")]
         public int MinTradeCode { get; set; } = 8180;
 

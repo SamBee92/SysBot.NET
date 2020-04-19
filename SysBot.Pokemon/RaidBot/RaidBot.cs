@@ -14,6 +14,8 @@ namespace SysBot.Pokemon
         private readonly RaidSettings Settings;
         public readonly IDumper Dump;
         private readonly bool ldn;
+        private readonly bool Roll;
+        private readonly bool FR;
 
         public RaidBot(PokeBotConfig cfg, PokeTradeHub<PK8> hub) : base(cfg)
         {
@@ -22,6 +24,8 @@ namespace SysBot.Pokemon
             Dump = Hub.Config.Folder;
             Counts = Hub.Counts;
             ldn = Settings.UseLdnMitm;
+            Roll = Settings.AutoRoll;
+            FR = Settings.FriendManagement;
         }
 
         private int encounterCount;
@@ -50,6 +54,12 @@ namespace SysBot.Pokemon
 
         private async Task<bool> HostRaidAsync(SAV8SWSH sav, int code, CancellationToken token)
         {
+            if (Roll == true)
+            {
+                Log("Initializing the rolling auto-host routine.");
+                await AutoRollDen(token).ConfigureAwait(false);
+            }
+
             // Connect to Y-Comm
             await EnsureConnectedToYComm(Hub.Config, token).ConfigureAwait(false);
 
@@ -75,7 +85,7 @@ namespace SysBot.Pokemon
             await ClearRaidTrainerName(token).ConfigureAwait(false);
 
             // Use Offset to actually calculate this value and press A
-            var timetowait = 3 * 60 * 1000;
+            var timetowait = 3 * 30 * 1000;
             await Task.Delay(1000, token).ConfigureAwait(false);
             while (timetowait > 0)
             {
@@ -137,7 +147,7 @@ namespace SysBot.Pokemon
         {
             Log("Resetting raid by restarting the game");
             // Close out of the game
-            await Click(HOME, 3_000, token).ConfigureAwait(false);
+            await Click(HOME, 4_000, token).ConfigureAwait(false);
             await Click(X, 1_000, token).ConfigureAwait(false);
             await Click(A, 5_000, token).ConfigureAwait(false); // Closing software prompt
             Log("Closed out of the game!");
@@ -158,6 +168,9 @@ namespace SysBot.Pokemon
             }
 
             Log("Back in the overworld!");
+            ResetCount++;
+            if (Roll)
+                return;
 
             // Reconnect to ycomm.
             await EnsureConnectedToYComm(Hub.Config, token).ConfigureAwait(false);
@@ -208,6 +221,158 @@ namespace SysBot.Pokemon
                 B, B, B, B // Ensure Overworld
             };
             await DaisyChainCommands(5_000, buttons, token).ConfigureAwait(false);
+        }
+
+        private int ResetCount;
+        private async Task AutoRollDen(CancellationToken token)
+        {
+            for (int day = 0; day < 3; day++)
+            {
+                if (ResetCount == 0 || ResetCount == 21)
+                {
+                    Log("Resetting system date.");
+                    if (!await IsCorrectScreen(CurrentScreen_Overworld, token).ConfigureAwait(false))
+                        await Click(B, 500, token).ConfigureAwait(false);
+                    await TimeMenu(token).ConfigureAwait(false);
+                    await ResetTime(token).ConfigureAwait(false);
+                    day = 0;
+                    ResetCount = 1;
+                    await MainLoop(token).ConfigureAwait(false);
+                }
+
+                if (ResetCount % 2 == 0 && FR)
+                {
+                    Log("Deleting and adding friends.");
+                    if (!await IsCorrectScreen(CurrentScreen_Overworld, token).ConfigureAwait(false))
+                        await Click(B, 500, token).ConfigureAwait(false);
+                    await FRAddRemove(token).ConfigureAwait(false);
+                    day = 0;
+                    await MainLoop(token).ConfigureAwait(false);
+                }
+
+                if (day == 0) //Enters den and invites others on day 1
+                {
+                    await Click(A, 2000, token).ConfigureAwait(false);
+                    await Click(A, 3000, token).ConfigureAwait(false);
+                }
+
+                if (day < 2) //Delay until back in lobby
+                {
+                    if (!await IsCorrectScreen(CurrentScreen_RaidParty, token).ConfigureAwait(false))
+                        await Task.Delay(2_000, token).ConfigureAwait(false);
+                }
+
+                await TimeMenu(token).ConfigureAwait(false); //Goes to system time screen
+                await TimeSkip(token).ConfigureAwait(false); //Skips a year
+                await Click(HOME, 1000, token).ConfigureAwait(false);
+                await Click(HOME, 1500, token).ConfigureAwait(false); //Returns back into game
+
+                await Click(B, 1000, token).ConfigureAwait(false);
+                await Click(A, 1000, token).ConfigureAwait(false); //Cancel lobby
+
+                if (day == 2) //We're on the fourth frame. Collect watts, exit lobby, return to main loop
+                {
+                    if (!await IsCorrectScreen(CurrentScreen_Overworld, token).ConfigureAwait(false))
+                        await Task.Delay(2_000, token).ConfigureAwait(false);
+                    while (!await IsCorrectScreen(CurrentScreen_RaidParty, token).ConfigureAwait(false))
+                        await Click(A, 1000, token).ConfigureAwait(false);
+                    await Click(B, 1000, token).ConfigureAwait(false);
+                    Log("Completed the rolling auto-host routine.");
+                    return;
+                }
+
+                if (!await IsCorrectScreen(CurrentScreen_Overworld, token).ConfigureAwait(false))
+                    await Task.Delay(2_000, token).ConfigureAwait(false);
+                while (!await IsCorrectScreen(CurrentScreen_RaidParty, token).ConfigureAwait(false))
+                    await Click(A, 1000, token).ConfigureAwait(false);
+                await Click(A, 3000, token).ConfigureAwait(false); //Collect watts, invite others  
+            }
+        }
+
+        private async Task TimeMenu(CancellationToken token)
+        {
+            await Click(HOME, 1500, token).ConfigureAwait(false);
+            await Click(DDOWN, 250, token).ConfigureAwait(false);
+            for (int i = 0; i < 4; i++)
+                await Click(DRIGHT, 250, token).ConfigureAwait(false);
+            await Click(A, 1000, token).ConfigureAwait(false); //Enter settings
+
+            await SetStick(SwitchStick.LEFT, 0, -30000, 1500, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, 0, 100, token).ConfigureAwait(false);
+            await Click(A, 500, token).ConfigureAwait(false); //Scroll to system settings
+
+            for (int i = 0; i < 4; i++)
+                await Click(DDOWN, 250, token).ConfigureAwait(false);
+            await Click(A, 500, token).ConfigureAwait(false); //Scroll to date/time settings
+
+            await Click(DDOWN, 250, token).ConfigureAwait(false);
+            await Click(DDOWN, 250, token).ConfigureAwait(false);
+            await Click(A, 500, token).ConfigureAwait(false); //Scroll to date/time screen
+        }
+
+        private async Task TimeSkip(CancellationToken token)
+        {
+            await Click(DRIGHT, 250, token).ConfigureAwait(false);
+            await Click(DRIGHT, 250, token).ConfigureAwait(false);
+            await Click(DUP, 150, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 30000, 0, 500, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, 0, 100, token).ConfigureAwait(false);
+            await Click(A, 500, token).ConfigureAwait(false); //Skip one year
+        }
+
+        private async Task ResetTime(CancellationToken token)
+        {
+            await Click(DRIGHT, 250, token).ConfigureAwait(false);
+            await Click(DRIGHT, 250, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, -30000, 2000, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, 0, 100, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 30000, 0, 500, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, 0, 100, token).ConfigureAwait(false);
+            await Click(A, 500, token).ConfigureAwait(false);
+            await Click(HOME, 1000, token).ConfigureAwait(false);
+            await Click(HOME, 1500, token).ConfigureAwait(false); //Roll back some years, go back into game
+        }
+
+        private async Task FRAddRemove(CancellationToken token)
+        {
+            await Click(HOME, 1500, token).ConfigureAwait(false);
+            await Click(DUP, 250, token).ConfigureAwait(false);
+            await Click(A, 1500, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, 30000, 750, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, 0, 100, token).ConfigureAwait(false);
+            await Click(DDOWN, 250, token).ConfigureAwait(false);
+            await Click(A, 500, token).ConfigureAwait(false); //Navigate to friend list
+
+            await SetStick(SwitchStick.LEFT, 30000, 0, 750, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, 0, 100, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, -30000, 4000, token).ConfigureAwait(false);
+            await SetStick(SwitchStick.LEFT, 0, 0, 100, token).ConfigureAwait(false); //Navigate to the bottom of the list
+
+            for (int i = 0; i < 5; i++)
+            {
+                await Click(A, 1500, token).ConfigureAwait(false);
+                await Click(DDOWN, 500, token).ConfigureAwait(false);
+                await Click(A, 1000, token).ConfigureAwait(false);
+                await Click(A, 1000, token).ConfigureAwait(false);
+                await Click(A, 6000, token).ConfigureAwait(false);
+                await Click(A, 1500, token).ConfigureAwait(false); //Select and remove user
+            }
+
+            await Click(B, 500, token).ConfigureAwait(false);
+            for (int i = 0; i < 3; i++)
+                await Click(DDOWN, 250, token).ConfigureAwait(false);
+            await Click(A, 250, token).ConfigureAwait(false);
+            await Click(A, 1000, token).ConfigureAwait(false); //Navigate to add friends
+            
+            for (int i = 0; i < 5; i++)
+            {
+                await Click(A, 1500, token).ConfigureAwait(false);
+                await Click(A, 6000, token).ConfigureAwait(false);
+                await Click(A, 1500, token).ConfigureAwait(false); //Add users
+            }
+
+            await Click(HOME, 500, token).ConfigureAwait(false);
+            await Click(HOME, 500, token).ConfigureAwait(false); //Return to game
         }
     }
 }
