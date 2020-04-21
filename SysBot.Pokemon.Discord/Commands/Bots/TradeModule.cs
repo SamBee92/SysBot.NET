@@ -62,7 +62,7 @@ namespace SysBot.Pokemon.Discord
             const int gen = 8;
             content = ReusableActions.StripCodeBlock(content);
             var set = new ShowdownSet(content);
-            if (set.InvalidLines.Count != 0)
+            if (set.InvalidLines.Count != 0 && !content.Contains("Ball:") && !(content.Contains("Shiny: Star") || content.Contains("Shiny: Square") || content.Contains("Shiny: No")))
             {
                 var msg = $"Unable to parse Showdown Set:\n{string.Join("\n", set.InvalidLines)}";
                 await ReplyAsync(msg).ConfigureAwait(false);
