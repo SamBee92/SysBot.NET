@@ -14,4 +14,10 @@
     <ProjectReference Include="..\SysBot.Pokemon\SysBot.Pokemon.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="PKHeX.Core.AutoMod">
+      <HintPath>..\SysBot.Pokemon\deps\PKHeX.Core.AutoMod.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>
