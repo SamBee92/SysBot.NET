@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
 using PKHeX.Core;
-using PKHeX.Core.AutoMod;
 
 namespace SysBot.Pokemon.Discord
 {
@@ -63,8 +62,7 @@ namespace SysBot.Pokemon.Discord
             const int gen = 8;
             content = ReusableActions.StripCodeBlock(content);
             var set = new ShowdownSet(content);
-            var s = new RegenTemplate(set);
-            if (set.InvalidLines.Count != 0)
+            if (set.InvalidLines.Count != 0 && !content.Contains("Ball:") && !(content.Contains("Shiny: Star") || content.Contains("Shiny: Square") || content.Contains("Shiny: No")))
             {
                 var msg = $"Unable to parse Showdown Set:\n{string.Join("\n", set.InvalidLines)}";
                 await ReplyAsync(msg).ConfigureAwait(false);
@@ -73,7 +71,7 @@ namespace SysBot.Pokemon.Discord
 
             var sav = AutoLegalityWrapper.GetTrainerInfo(gen);
 
-            var pkm = sav.GetLegal(s, out _);
+            var pkm = sav.GetLegal(set, out _);
             var la = new LegalityAnalysis(pkm);
             var spec = GameInfo.Strings.Species[set.Species];
             var invalid = !(pkm is PK8) || (!la.Valid && SysCordInstance.Self.Hub.Config.Legality.VerifyLegality);
