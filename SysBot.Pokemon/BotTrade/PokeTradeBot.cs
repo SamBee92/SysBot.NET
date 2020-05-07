@@ -178,7 +178,8 @@ namespace SysBot.Pokemon
 
             // Loading Screen
             await Task.Delay(1_000, token).ConfigureAwait(false);
-            Hub.Config.Stream.StartEnterCode(this);
+            if (poke.Type != PokeTradeType.Random)
+                Hub.Config.Stream.StartEnterCode(this);
             await Task.Delay(1_000, token).ConfigureAwait(false);
 
             var code = poke.Code;
@@ -193,6 +194,7 @@ namespace SysBot.Pokemon
             // Confirming...
             for (int i = 0; i < 4; i++)
                 await Click(A, 1_000, token).ConfigureAwait(false);
+
             Hub.Config.Stream.EndEnterCode(this);
 
             // Should be on overworld by now.
@@ -412,7 +414,7 @@ namespace SysBot.Pokemon
             var time = TimeSpan.FromSeconds(Hub.Config.Trade.MaxDumpTradeTime);
             var start = DateTime.Now;
             await Connection.WriteBytesAsync(PokeTradeBotUtil.EMPTY_SLOT, LinkTradePartnerPokemonOffset, token).ConfigureAwait(false);
-            while (ctr <= Hub.Config.Trade.MaxDumpsPerTrade || DateTime.Now - start < time)
+            while (ctr <= Hub.Config.Trade.MaxDumpsPerTrade && DateTime.Now - start < time)
             {
                 var pk = await ReadUntilPresent(LinkTradePartnerPokemonOffset, 15_000, 1_000, token).ConfigureAwait(false);
                 if (pk == null || pk.Species < 1 || !pk.ChecksumValid)
