@@ -12,11 +12,26 @@ namespace SysBot.Pokemon
         [Category(FeatureToggle), Description("When set, the bot will assume that ldn_mitm sysmodule is running on your system. Better stability")]
         public bool UseLdnMitm { get; set; } = true;
 
-        [Category(FeatureToggle), Description("When set, the bot will roll species and set date to 2000, resetting it once it reaches 2060.")]
-        public bool AutoRoll { get; set; } = true;
+        [Category(FeatureToggle), Description("When set, the bot will create a text file with current Raid Code for OBS.")]
+        public bool RaidLog { get; set; } = false;
 
-        [Category(FeatureToggle), Description("When set, the bot will remove then add 5 friends every 2 raids.")]
-        public bool FriendManagement { get; set; } = true;
+        [Category(Hosting), Description("Used with RaidLog. Will display your Friend Code for OBS.")]
+        public string FriendCode { get; set; } = string.Empty;
+
+        [Category(FeatureToggle), Description("When set, the bot will roll species and set date to 2000, resetting it once it reaches 2060.")]
+        public bool AutoRoll { get; set; } = false;
+
+        [Category(FeatureToggle), Description("When set, the bot will remove and add 5 friends every 3 hosts. Use either this or Add.")]
+        public bool FriendCombined { get; set; } = false;
+
+        [Category(FeatureToggle), Description("When set, the bot will add 5 friends every 3 hosts. Use either this or Combined.")]
+        public bool FriendAdd { get; set; } = false;
+
+        [Category(Hosting), Description("Amount of friends to purge. Default is 0, will be reset back to default after a purge.")]
+        public int FriendPurge { get; set; } = 0;
+
+        [Category(Hosting), Description("How long the bot waits for before attempting to start a raid. Default: 180 seconds.")]
+        public int TimeToJoinRaid { get; set; } = 180;
 
         [Category(Hosting), Description("Minimum Link Code to host the raid with.")]
         public int MinRaidCode { get; set; } = 8180;
