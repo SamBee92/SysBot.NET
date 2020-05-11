@@ -1,10 +1,10 @@
 ﻿using PKHeX.Core;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using SysBot.Base;
 using static SysBot.Base.SwitchButton;
 using static SysBot.Pokemon.PokeDataOffsets;
-using System;
 
 namespace SysBot.Pokemon
 {
@@ -21,14 +21,13 @@ namespace SysBot.Pokemon
         private readonly bool FRBoth;
         private readonly bool FRAdd;
         private int FriendRemoveCount;
-        private readonly int timetojoinraid;
 
         public RaidBot(PokeBotConfig cfg, PokeTradeHub<PK8> hub) : base(cfg)
         {
             Hub = hub;
-            Settings = Hub.Config.Raid;
-            Dump = Hub.Config.Folder;
-            Counts = Hub.Counts;
+            Settings = hub.Config.Raid;
+            Dump = hub.Config.Folder;
+            Counts = hub.Counts;
             ldn = Settings.UseLdnMitm;
             RaidLog = Settings.RaidLog;
             FriendCode = Settings.FriendCode;
@@ -36,7 +35,6 @@ namespace SysBot.Pokemon
             FRBoth = Settings.FriendCombined;
             FRAdd = Settings.FriendAdd;
             FriendRemoveCount = Settings.FriendPurge;
-            timetojoinraid = Settings.TimeToJoinRaid;
         }
 
         private int encounterCount;
@@ -50,16 +48,25 @@ namespace SysBot.Pokemon
             var originalTextSpeed = await EnsureTextSpeedFast(token).ConfigureAwait(false);
 
             Log("Starting main RaidBot loop.");
+
+
+            if (Hub.Config.Raid.MinTimeToWait < 0 || Hub.Config.Raid.MinTimeToWait > 180)
+            {
+                Log("Time to wait must be between 0 and 180 seconds.");
+                return;
+            }
+
             while (!token.IsCancellationRequested && Config.NextRoutineType == PokeRoutineType.RaidBot)
             {
                 Config.IterateNextRoutine();
                 int code = Settings.GetRandomRaidCode();
                 bool airplane = await HostRaidAsync(sav, code, token).ConfigureAwait(false);
-                await ResetGameAsync(airplane, token).ConfigureAwait(false);
 
                 encounterCount++;
                 Log($"Raid host {encounterCount} finished.");
                 Counts.AddCompletedRaids();
+
+                await ResetGameAsync(airplane, token).ConfigureAwait(false);
             }
             await SetTextSpeed(originalTextSpeed, token).ConfigureAwait(false);
         }
@@ -99,16 +106,12 @@ namespace SysBot.Pokemon
             await EnsureConnectedToYComm(Hub.Config, token).ConfigureAwait(false);
 
             // Press A and stall out a bit for the loading
-            await Click(A, 5000, token).ConfigureAwait(false);
-            if (!await IsCorrectScreen(CurrentScreen_RaidParty, token).ConfigureAwait(false))
-            {
-                await Task.Delay(1000, token).ConfigureAwait(false);
-            }
-
+            await Click(A, 5_000, token).ConfigureAwait(false);
+            
             if (code >= 0)
             {
                 // Set Link code
-                await Click(PLUS, 1000, token).ConfigureAwait(false);
+                await Click(PLUS, 1_000, token).ConfigureAwait(false);
                 await EnterTradeCode(code, token).ConfigureAwait(false);
 
                 if (RaidLog == true)
@@ -120,7 +123,7 @@ namespace SysBot.Pokemon
 
                 // Raid barrier here maybe?
                 await Click(PLUS, 2_000, token).ConfigureAwait(false);
-                await Click(A, 1000, token).ConfigureAwait(false);
+                await Click(A, 1_000, token).ConfigureAwait(false);
             }
 
             if (code < 0 && RaidLog == true)
@@ -131,28 +134,47 @@ namespace SysBot.Pokemon
             }
 
             // Invite others, confirm Pokémon and wait
-            await Click(A, 10000, token).ConfigureAwait(false);
-            await Click(DUP, 1000, token).ConfigureAwait(false);
-            await Click(A, 1000, token).ConfigureAwait(false);
+            await Click(A, 7_000, token).ConfigureAwait(false);
+            await Click(DUP, 1_000, token).ConfigureAwait(false);
+            await Click(A, 1_000, token).ConfigureAwait(false);
 
             // Use Offset to actually calculate this value and press A
-            var timetowait = (timetojoinraid * 1000) - 3000;
-            await Task.Delay(1000, token).ConfigureAwait(false);
-            while (timetowait > 0)
+            var timetowait = Hub.Config.Raid.MinTimeToWait * 1_000;
+            var timetojoinraid = 175_000 - timetowait;
+
+            Log("Waiting on raid party...");
+            // Wait the minimum timer or until raid party fills up.
+            while (timetowait > 0 && !await GetRaidPartyIsFullAsync(token).ConfigureAwait(false))
             {
-                await Task.Delay(1000, token).ConfigureAwait(false);
-                timetowait -= 1000;
+                await Task.Delay(1_000, token).ConfigureAwait(false);
+                timetowait -= 1_000;
             }
 
-            await Click(A, 500, token).ConfigureAwait(false);
-            Log("Attempting to start the raid.");
-            while (!await IsInBattle(token).ConfigureAwait(false))
-                await Click(A, 500, token).ConfigureAwait(false);
+            var msg = code < 0 ? "no Link Code." : $"code: {code:0000}.";
+            Log("Attempting to start the raid with " + msg);
 
-            Log($"Hosting raid as {sav.OT} with code: {code:0000}.");
+            // Wait a few seconds for people to lock in.
             await Task.Delay(5_000, token).ConfigureAwait(false);
 
+            /* Press A and check if we entered a raid.  If other users don't lock in,
+               it will automatically start once the timer runs out. If we don't make it into
+               a raid by the end, something has gone wrong and we should quit trying. */
+            while (timetojoinraid > 0 && !await IsInBattle(token).ConfigureAwait(false))
+            {
+                await Click(A, 0_500, token).ConfigureAwait(false);
+                timetojoinraid -= 0_500;
+            }
+
+            Log("Finishing raid routine.");
+            await Task.Delay(5_500, token).ConfigureAwait(false);
+
             return false;
+        }
+
+        private async Task<bool> GetRaidPartyIsFullAsync(CancellationToken token)
+        {
+            var data = await Connection.ReadBytesAsync(RaidTrainerFullOffset, 4, token).ConfigureAwait(false);
+            return BitConverter.ToUInt32(data, 0) == 0xFFFFFFFF;
         }
 
         private async Task ResetGameAsync(bool airplane, CancellationToken token)
@@ -193,7 +215,7 @@ namespace SysBot.Pokemon
             if (Roll || FRAdd || FRBoth)
                 return;
 
-            // Reconnect to ycomm.
+            // Reconnect to Y-Comm.
             await EnsureConnectedToYComm(Hub.Config, token).ConfigureAwait(false);
             Log("Reconnected to Y-Comm!");
         }
@@ -225,7 +247,7 @@ namespace SysBot.Pokemon
             }
             Log("Back in the overworld!");
 
-            // Reconnect to ycomm.
+            // Reconnect to Y-Comm.
             await EnsureConnectedToYComm(Hub.Config, token).ConfigureAwait(false);
             Log("Reconnected to Y-Comm!");
         }
@@ -338,15 +360,15 @@ namespace SysBot.Pokemon
             await Click(DDOWN, 150, token).ConfigureAwait(false);
             await SetStick(SwitchStick.LEFT, 30000, 0, 1000, token).ConfigureAwait(false);
             await SetStick(SwitchStick.LEFT, 0, 0, 250, token).ConfigureAwait(false);
-            await Click(DLEFT, 150, token).ConfigureAwait(false);
+            await Click(DLEFT, 250, token).ConfigureAwait(false);
             await Click(A, 1000, token).ConfigureAwait(false); //Enter settings
 
             await SetStick(SwitchStick.LEFT, 0, -30000, 1500, token).ConfigureAwait(false);
             await SetStick(SwitchStick.LEFT, 0, 0, 250, token).ConfigureAwait(false);
-            await Click(A, 500, token).ConfigureAwait(false); //Scroll to system settings
+            await Click(A, 750, token).ConfigureAwait(false); //Scroll to system settings
 
             for (int i = 0; i < 4; i++)
-                await Click(DDOWN, 150, token).ConfigureAwait(false);
+                await Click(DDOWN, 200, token).ConfigureAwait(false);
             await Click(A, 500, token).ConfigureAwait(false); //Scroll to date/time settings
 
             await Click(DDOWN, 150, token).ConfigureAwait(false);

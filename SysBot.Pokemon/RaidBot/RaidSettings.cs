@@ -30,13 +30,13 @@ namespace SysBot.Pokemon
         [Category(Hosting), Description("Amount of friends to purge. Default is 0, will be reset back to default after a purge.")]
         public int FriendPurge { get; set; } = 0;
 
-        [Category(Hosting), Description("How long the bot waits for before attempting to start a raid. Default: 180 seconds.")]
-        public int TimeToJoinRaid { get; set; } = 180;
+        [Category(Hosting), Description("Minimum amount of seconds to wait before starting a raid. Ranges from 0 to 180 seconds.")]
+        public int MinTimeToWait { get; set; } = 90;
 
-        [Category(Hosting), Description("Minimum Link Code to host the raid with.")]
+        [Category(Hosting), Description("Minimum Link Code to host the raid with. Set this to -1 to host with no code.")]
         public int MinRaidCode { get; set; } = 8180;
 
-        [Category(Hosting), Description("Maximum Link Code to host the raid with.")]
+        [Category(Hosting), Description("Maximum Link Code to host the raid with. Set this to -1 to host with no code.")]
         public int MaxRaidCode { get; set; } = 8199;
 
         /// <summary>
